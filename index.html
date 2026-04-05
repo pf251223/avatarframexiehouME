@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>邂逅ME头像框</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        body {
+            background: #f8f5ff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+            gap: 15px;
+        }
+        :root {
+            --purple: #7A0099;
+            --light: #f0e6ff;
+            --gray: #666;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .logo {
+            width: 45px;
+            height: 45px;
+        }
+        h1 {
+            color: var(--purple);
+            font-size: 24px;
+        }
+        .upload {
+            width: 120px;
+            height: 120px;
+            border: 2px dashed var(--purple);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            background: #fff;
+        }
+        #uploadImg {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+        .uploadTxt {
+            color: var(--purple);
+            font-size: 14px;
+        }
+        #file {
+            display: none;
+        }
+        .zoom {
+            display: flex;
+            gap: 20px;
+        }
+        .zoomBtn {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: var(--purple);
+            color: #fff;
+            font-size: 20px;
+            border: none;
+        }
+        /* 编辑区域：拖动+缩放核心 */
+        .editBox {
+            width: 280px;
+            height: 280px;
+            border-radius: 16px;
+            background: #fff;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        #avatar {
+            position: absolute;
+            width: 240px;
+            height: 240px;
+            object-fit: cover;
+            cursor: move;
+            touch-action: none;
+            left: 20px;
+            top: 20px;
+        }
+        #frameLayer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        /* 头像框选择 */
+        .frameList {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            width: 100%;
+            max-width: 380px;
+        }
+        .frameItem {
+            aspect-ratio: 1/1;
+            border-radius: 10px;
+            border: 3px solid transparent;
+            cursor: pointer;
+            background: #fff;
+        }
+        .frameItem.active {
+            border-color: var(--purple);
+        }
+        .frameItem img {
+            width: 100%;
+            height: 100%;
+        }
+        /* 保存按钮 */
+        #save {
+            padding: 12px 40px;
+            background: var(--purple);
+            color: #fff;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+        }
+        #save:disabled {
+            background: #c5a2d3;
+        }
+        footer {
+            margin-top: auto;
+            font-size: 12px;
+            color: var(--gray);
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <img src="logo.png" class="logo" alt="logo">
+    <h1>邂逅ME头像框</h1>
+</header>
+
+<label for="file" class="upload">
+    <img id="uploadImg" alt="">
+    <div class="uploadTxt">点击上传头像</div>
+</label>
+<input type="file" id="file" accept="image/*">
+
+<div class="zoom">
+    <button class="zoomBtn" id="small">-</button>
+    <button class="zoomBtn" id="big">+</button>
+</div>
+
+<div class="editBox">
+    <img id="avatar" draggable="false">
+    <img id="frameLayer" src="">
+</div>
+
+<div class="frameList">
+    <div class="frameItem" data-src="frame1.png"><img src="frame1.png"></div>
+    <div class="frameItem" data-src="frame2.png"><img src="frame2.png"></div>
+    <div class="frameItem" data-src="frame3.png"><img src="frame3.png"></div>
+    <div class="frameItem" data-src="frame4.png"><img src="frame4.png"></div>
+    <div class="frameItem" data-src="frame5.png"><img src="frame5.png"></div>
+    <div class="frameItem" data-src="frame6.png"><img src="frame6.png"></div>
+</div>
+
+<button id="save" disabled>保存高清头像</button>
+
+<footer>机械工程系文化策划部出品</footer>
+
+<script>
+// 核心元素
+const file = document.getElementById('file');
+const uploadImg = document.getElementById('uploadImg');
+const avatar = document.getElementById('avatar');
+const frameLayer = document.getElementById('frameLayer');
+const saveBtn = document.getElementById('save');
+const frameItems = document.querySelectorAll('.frameItem');
+
+// 状态
+let hasImg = false;
+let hasFrame = false;
+let scale = 1;
+let x = 20, y = 20;
+
+// 1. 上传头像
+file.onchange = (e) => {
+    const url = URL.createObjectURL(e.target.files[0]);
+    uploadImg.src = url;
+    avatar.src = url;
+    uploadImg.style.display = 'block';
+    document.querySelector('.uploadTxt').style.display = 'none';
+    hasImg = true;
+    checkBtn();
+};
+
+// 2. 选择头像框
+frameItems.forEach(item => {
+    item.onclick = () => {
+        frameItems.forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        frameLayer.src = item.dataset.src;
+        hasFrame = true;
+        checkBtn();
+    };
+});
+
+// 按钮启用判断
+function checkBtn() {
+    saveBtn.disabled = !(hasImg && hasFrame);
+}
+
+// 3. 拖动功能（单指拖动）
+let isDrag = false;
+let startX, startY;
+
+avatar.onmousedown = avatar.ontouchstart = (e) => {
+    isDrag = true;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    startX = clientX - x;
+    startY = clientY - y;
+};
+
+document.onmousemove = document.ontouchmove = (e) => {
+    if (!isDrag) return;
+    e.preventDefault();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    x = clientX - startX;
+    y = clientY - startY;
+    update();
+};
+
+document.onmouseup = document.ontouchend = () => {
+    isDrag = false;
+};
+
+// 4. 缩放功能（按钮+双指）
+document.getElementById('big').onclick = () => { scale += 0.1; update(); };
+document.getElementById('small').onclick = () => { scale = Math.max(0.5, scale-0.1); update(); };
+
+// 双指缩放
+avatar.ontouchmove = (e) => {
+    if (e.touches.length === 2) {
+        const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+        scale = Math.max(0.5, Math.min(3, dist / 100));
+        update();
+    }
+};
+
+// 更新样式
+function update() {
+    avatar.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+}
+
+// 5. 保存功能（彻底修复，100%响应）
+saveBtn.onclick = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = 1080;
+    const ctx = canvas.getContext('2d');
+
+    // 绘制头像
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = avatar.src;
+    img.onload = () => {
+        ctx.save();
+        ctx.translate(540, 540);
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, x - 540, y - 540, 1080, 1080);
+        ctx.restore();
+
+        // 绘制头像框
+        const frame = new Image();
+        frame.crossOrigin = 'anonymous';
+        frame.src = frameLayer.src;
+        frame.onload = () => {
+            ctx.drawImage(frame, 0, 0, 1080, 1080);
+            // 下载
+            const a = document.createElement('a');
+            a.download = '邂逅ME专属头像.png';
+            a.href = canvas.toDataURL('image/png');
+            a.click();
+        };
+    };
+};
+</script>
+</body>
+</html>
